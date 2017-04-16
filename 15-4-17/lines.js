@@ -1,8 +1,8 @@
-var shineSpread = 0.1;
-var lineColor = '#011404';
+// var lineColor = '#011404';
+var lineColor = '#8c8e89';
 var lampColor = '#ffc300';
 var shineColorDull = lineColor;
-var shineColorBright = '#ffeeba';
+var shineColorBright = '#d8eeff';
 var backgroundColor = '#a3a59f';
 
 var background = new Shape.Rectangle({
@@ -11,17 +11,18 @@ var background = new Shape.Rectangle({
 });
 
 var randomLineGroup = new Group();
-var numLines = 150;
+var numLines = 200;
 var randomLines = [];
 for (var i = 0; i < numLines; i++) {
     var startPoint = randomPoint();
-    var angle = Math.random() * 360;
-    var length = randInt(100, 400);
+    // var angle = Math.random() * 360;
+    var angle = 0;
+    var length = randInt(50, 150);
     var endPoint = startPoint + new Point(length, 0);
     var line = new Path.Line(startPoint, endPoint);
     line.rotate(angle, startPoint);
     line.strokeColor = lineColor;
-    line.strokeWidth = 2;
+    line.strokeWidth = 1;
     randomLines.push(line);
     randomLineGroup.addChild(line);
 }
@@ -40,17 +41,33 @@ putItemsInActiveLayer([background, randomLineGroup, shiningLineGroup, lampGroup]
 
 function onMouseMove(event) {
     lampGroup.position = event.point;
+    updateShines();
+}
 
+function onFrame() {
+    for (var i = 0; i < randomLines.length; i++) {
+	randomLines[i].rotate(1);
+    }
+    updateShines();
+}
+
+function updateShines() {
+    shiningLineGroup.removeChildren();
     for (var i = 0; i < randomLines.length; i++) {
 	var line = randomLines[i];
 	var p = line.firstSegment.point;
 	var q = line.lastSegment.point;
-	var reflectionT = projectOnto(lamp.position, p, q);
-	if (0 < reflectionT && reflectionT < 1) {
-	    // var point = p + (q - p) * reflectionT;
+	var shineCenterT = projectOnto(lamp.position, p, q);
+	if (0 < shineCenterT && shineCenterT < 1) {
+	    // can adjust 1 in the formula below to make this fall off faster or slower
+	    var shineLength = calculateShineLength(distanceToLine(lamp.position, p, q));
+	    // var shineLength = maxShineLength / Math.sqrt(1 + square(distanceToLine(lamp.position, p, q)));
+	    var shineLengthT = shineLength / (p - q).length;
+	    var shineStartT = Math.max(0, shineCenterT - shineLengthT / 2);
+	    var shineEndT   = Math.min(1, shineCenterT + shineLengthT / 2);
+	    var startPoint = p + (q - p) * shineStartT;
+	    var endPoint   = p + (q - p) * shineEndT;
 	    
-	    var startPoint = p + (q - p) * Math.max(0, reflectionT - shineSpread);
-	    var endPoint = p + (q - p) * Math.min(1, reflectionT + shineSpread);
 	    var line = new Path.Line(startPoint, endPoint).removeOnMove();
 	    line.strokeWidth = 2;
 	    line.strokeColor = {
@@ -108,8 +125,44 @@ function projectOnto(c, p, q) {
     return t;
 }
 
+var sqrtInvDotDict = {};
+// returns the distance from c to the line that passes through p and q
+function distanceToLine(c, p, q) {
+    var relC = c - p;
+    var v = q - p;
+    var w = v.clone().rotate(90); // note dot(v, v) = dot(w, w);
+    
+    var distance = Math.abs(dot(relC, w) * Math.sqrt(1 / dot(v, v)));
+    return distance;
+}
+
+// console.log(distanceToLine(new Point(2, 2), new Point(1, 0), new Point(0, 1)));
+
 function putItemsInActiveLayer(items) {
     for (var i = 0; i < items.length; i++) {
 	project.activeLayer.insertChild(i, items[i]);
     }
+}
+
+function square(x) {
+    return x * x;
+}
+
+// height of the viewer above the screen
+var h = 10;
+// the apparent size of the lamp, as reflected in the 'random line'.
+// Involves some sloppy geometry that I hope still works out okay.
+// function calculateShineLength(centerDistToLine) {
+//     var outerDistToLine = Math.max(1, centerDistToLine - lampRadius);
+//     var shrinkFactor = Math.sqrt(1 + square(outerDistToLine / h));
+//     return lampRadius / shrinkFactor;
+// }
+
+var falloffScalar = 100;
+// throwing geometry out the window here
+function calculateShineLength(centerDistToLine) {
+    var outerDistToLine = Math.max(1, centerDistToLine - lampRadius);
+    var shrinkFactor = Math.max(1, outerDistToLine / falloffScalar);
+    var modifiedShrinkFactor = shrinkFactor;
+    return lampRadius / modifiedShrinkFactor;
 }
